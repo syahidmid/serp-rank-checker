@@ -1,69 +1,53 @@
 import streamlit as st
 import pandas as pd
 import requests
-import time
 import pycountry 
 
+# Ambil daftar negara dan bahasa dari pycountry
 countries = [country.name for country in pycountry.countries]
 languages = [f"{lang.alpha_2} - {lang.name}" for lang in pycountry.languages if hasattr(lang, 'alpha_2')]
 
-
-def run_serperdev(api_key, keyword, location="Indonesia", lang="id", site=""):
+# Cache untuk menyimpan hasil pencarian selama 5 jam (18000 detik)
+@st.cache_data(ttl=18000)
+def get_serp_results(api_key, keyword, location, lang, site):
     url = "https://google.serper.dev/search"
     headers = {
         "X-API-KEY": api_key,
         "Content-Type": "application/json"
     }
 
-    for num in range(10, 110, 10):  # Search in steps: 10, 20, ..., 100
-        payload = {
-            "q": keyword,
-            "location": location,
-            "gl": lang,
-            "hl": lang,
-            "num": num
-        }
-
-        response = requests.post(url, headers=headers, json=payload)
-
-        if response.status_code == 200:
-            result = response.json()
-            filtered_result = next((item for item in result.get("organic", []) if site in item.get("link", "")), None)
-
-            if filtered_result:
-                return {"Keyword": keyword, "Position": filtered_result["position"], "URL": filtered_result["link"]}
-
-        time.sleep(1)  # Delay to avoid rate limit
-
-    return {"Keyword": keyword, "Position": "Not Found", "URL": "N/A"}
-
-
-def fetch_top_10(api_key, keyword, location="Indonesia", lang="id"):
-    url = "https://google.serper.dev/search"
-    headers = {
-        "X-API-KEY": api_key,
-        "Content-Type": "application/json"
-    }
-
+    # Langsung ambil 100 results karena lebih hemat (2 credits saja)
     payload = {
         "q": keyword,
         "location": location,
         "gl": lang,
         "hl": lang,
-        "num": 10  # Only fetch Top 10
+        "num": 100  
     }
 
     response = requests.post(url, headers=headers, json=payload)
 
     if response.status_code == 200:
-        return response.json().get("organic", [])  # Return only organic results
+        result = response.json()
+        filtered_result = next((item for item in result.get("organic", []) if site in item.get("link", "")), None)
 
-    return [{"error": "Failed to fetch data"}]
+        return {
+            "Keyword": keyword,
+            "Position": filtered_result["position"] if filtered_result else "Not Found",
+            "URL": filtered_result["link"] if filtered_result else "N/A",
+            "Top_100": result.get("organic", [])  # Simpan seluruh 100 hasil pencarian
+        }
+
+    return {"Keyword": keyword, "Position": "Not Found", "URL": "N/A", "Top_100": []}
+
+# Fungsi ini hanya mengambil Top 10 dari hasil `get_serp_results`
+def fetch_top_10(results):
+    return results["Top_100"][:10]  # Ambil 10 hasil pertama dari Top 100
 
 # Streamlit UI
 st.set_page_config(page_title="SERP Rank Checker", layout="wide")
 
-# Sidebar for API Key
+# Sidebar untuk API Key
 st.sidebar.header("🔑 API Settings")
 api_key = st.sidebar.text_input("Enter your Serper.dev API Key", type="password")
 st.sidebar.write("**[Get your API key at Serper.dev](https://serper.dev/)**")
@@ -78,7 +62,6 @@ It offers **2,500 free queries** without requiring a credit card.
 st.sidebar.markdown("---")
 st.sidebar.write("👤 **Connect with Me:**")
 st.sidebar.markdown("🔗[Syahid Muhammad](http://syahid.super.site/)")
-
 
 # Form input
 st.title("🕷️ SERP Rank Checker")
@@ -95,14 +78,18 @@ with st.form("serp_form"):
     
     submitted = st.form_submit_button("Check Rankings")
 
-# Process search if form is submitted
-if submitted and api_key:
+# Jika tombol diklik tanpa API Key, tampilkan error
+if submitted:
+    if not api_key:
+        st.error("🚨 API Key is required! Please enter your Serper.dev API key in the sidebar.")
+        st.stop()  # Hentikan eksekusi jika API Key kosong
+
     keyword_list = [kw.strip() for kw in keywords.split("\n") if kw.strip()]
     
     if not keyword_list:
-        st.error("Please enter at least one keyword.")
+        st.error("❌ Please enter at least one keyword.")
     elif not site:
-        st.error("Please enter a domain to track.")
+        st.error("❌ Please enter a domain to track.")
     else:
         st.info(f"Fetching SERP rankings for {len(keyword_list)} keywords...")
 
@@ -110,20 +97,21 @@ if submitted and api_key:
         top_10_results = {}
 
         for keyword in keyword_list:
-            result = run_serperdev(api_key, keyword, location, lang.split(" - ")[0], site)
+            result = get_serp_results(api_key, keyword, location, lang.split(" - ")[0], site)
             results.append(result)
-            top_10_results[keyword] = fetch_top_10(api_key, keyword, location, lang.split(" - ")[0])  # Fetch Top 10 data
+            top_10_results[keyword] = fetch_top_10(result)  # 🔥 Mengambil Top 10 tanpa request ulang
 
-        df = pd.DataFrame(results)
+        # Hapus kolom "Top_100" dari tampilan tabel utama
+        df = pd.DataFrame(results).drop(columns=["Top_100"])
 
-        # Create Tabs
+        # Buat Tabs untuk hasil
         tab1, tab2 = st.tabs(["📊 SERP Table", "🔍 Top 10 Results"])
 
         with tab1:
             st.write("### 📊 SERP Results")
             st.dataframe(df, use_container_width=True)
 
-            # CSV Download Option
+            # Opsi Download CSV
             csv = df.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="📥 Download CSV",
@@ -143,7 +131,6 @@ if submitted and api_key:
                         snippet = entry.get("snippet", "No Snippet Available")
                         date = entry.get("date", "Unknown Date")
 
-                        
                         st.write(f"**{idx}. {title}**")  
                         st.markdown(f"🔗 [{link}]({link})")  
                         st.write(f"📅 {date} | {snippet}")  
