@@ -1,6 +1,6 @@
 import re
 import pycountry
-import langcodes
+
 
 def sanitize_domain(domain):
     if not domain:
