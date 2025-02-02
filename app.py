@@ -3,12 +3,10 @@ import pandas as pd
 import requests
 import pycountry 
 from utils import sanitize_domain
-from message import ABOUT_TEXT, CONNECT_TEXT, APP_INTRO_TEXT, API_WARNING, KEYWORD_ERROR, DOMAIN_ERROR 
-
+from message import ABOUT_TEXT, APP_INTRO_TEXT, API_WARNING, KEYWORD_ERROR, DOMAIN_ERROR  
 
 countries = [country.name for country in pycountry.countries]
 languages = [f"{lang.alpha_2} - {lang.name}" for lang in pycountry.languages if hasattr(lang, 'alpha_2')]
-
 
 @st.cache_data(ttl=18000)
 def get_serp_results(api_key, keyword, location, lang, site):
@@ -28,17 +26,14 @@ def get_serp_results(api_key, keyword, location, lang, site):
 
     response = requests.post(url, headers=headers, json=payload)
 
-    
     if response.status_code == 403:
         st.error("🚨 Invalid API Key! Please check your Serper.dev API key.")
         st.stop()
-
 
     if response.status_code != 200:
         st.error(f"❌ Error: {response.status_code} - {response.text}")
         st.stop()
 
-  
     result = response.json()
     filtered_result = next((item for item in result.get("organic", []) if site in item.get("link", "")), None)
 
@@ -48,7 +43,6 @@ def get_serp_results(api_key, keyword, location, lang, site):
         "URL": filtered_result["link"] if filtered_result else "N/A",
         "Top_100": result.get("organic", [])  
     }
-
 
 def fetch_top_10(results):
     return results["Top_100"][:10]  
@@ -63,24 +57,27 @@ st.sidebar.write("**[Get your API key at Serper.dev](https://serper.dev/)**")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(ABOUT_TEXT) 
+
+
+# 🔥 Tambahkan tombol "Connect with Me" di sidebar dengan tautan langsung
 st.sidebar.markdown("---")
-st.sidebar.markdown(CONNECT_TEXT)  
+if st.sidebar.button("🧙‍♂️ Connect with Me", use_container_width=True):
+    st.markdown('<meta http-equiv="refresh" content="0;URL=\'http://syahid.super.site/\'">', unsafe_allow_html=True)
+
+
 
 # Form input
 st.title(APP_INTRO_TEXT)
 
-
 with st.form("serp_form"):
     keywords = st.text_area("Keywords (one per line)", placeholder="Enter keywords here...")
 
-   
     location = st.selectbox("Select Country", options=countries, index=countries.index("Indonesia"))
     lang = st.selectbox("Select Language", options=languages, index=languages.index("id - Indonesian"))
 
     site = sanitize_domain(st.text_input("Domain (e.g., example.com)", placeholder="Enter domain to track"))
     
     submitted = st.form_submit_button("Check Rankings")
-
 
 if submitted:
     if not api_key:
@@ -104,7 +101,6 @@ if submitted:
             results.append(result)
             top_10_results[keyword] = fetch_top_10(result)  # 🔥 Mengambil Top 10 tanpa request ulang
 
-       
         df = pd.DataFrame(results).drop(columns=["Top_100"])
 
         # Buat Tabs untuk hasil
