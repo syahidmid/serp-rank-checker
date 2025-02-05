@@ -10,4 +10,3 @@ def sanitize_domain(domain):
 
     return domain
 
-

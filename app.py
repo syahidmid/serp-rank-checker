@@ -1,12 +1,17 @@
 import streamlit as st
 import pandas as pd
 import requests
-import pycountry 
+import pycountry
+import geonamescache
 from utils import sanitize_domain
 from message import ABOUT_TEXT, APP_INTRO_TEXT, API_WARNING, KEYWORD_ERROR, DOMAIN_ERROR  
 
+gc = geonamescache.GeonamesCache()
 countries = [country.name for country in pycountry.countries]
 languages = [f"{lang.alpha_2} - {lang.name}" for lang in pycountry.languages if hasattr(lang, 'alpha_2')]
+
+# 🔥 Ambil semua kota dari geonamescache (tanpa filter negara)
+ALL_CITIES = sorted([city["name"] for city in gc.get_cities().values()])
 
 @st.cache_data(ttl=18000)
 def get_serp_results(api_key, keyword, location, lang, site):
@@ -58,13 +63,8 @@ st.sidebar.write("**[Get your API key at Serper.dev](https://serper.dev/)**")
 st.sidebar.markdown("---")
 st.sidebar.markdown(ABOUT_TEXT) 
 
-
-# 🔥 Tambahkan tombol "Connect with Me" di sidebar dengan tautan langsung
 st.sidebar.markdown("---")
-if st.sidebar.button("🧙‍♂️ Connect with Me", use_container_width=True):
-    st.markdown('<meta http-equiv="refresh" content="0;URL=\'http://syahid.super.site/\'">', unsafe_allow_html=True)
-
-
+st.sidebar.link_button("🧙‍♂️ Connect with Me", "http://syahid.super.site/", use_container_width=True)
 
 # Form input
 st.title(APP_INTRO_TEXT)
@@ -72,11 +72,15 @@ st.title(APP_INTRO_TEXT)
 with st.form("serp_form"):
     keywords = st.text_area("Keywords (one per line)", placeholder="Enter keywords here...")
 
-    location = st.selectbox("Select Country", options=countries, index=countries.index("Indonesia"))
-    lang = st.selectbox("Select Language", options=languages, index=languages.index("id - Indonesian"))
+    selected_country = st.selectbox("Select Country", options=countries, index=countries.index("Indonesia"))
 
+    default_city = "Jakarta"
+    city_index = ALL_CITIES.index(default_city) if default_city in ALL_CITIES else 0
+    selected_city = st.selectbox("Select City (Optional)", options=ALL_CITIES, index=city_index)
+
+    lang = st.selectbox("Select Language", options=languages, index=languages.index("id - Indonesian"))
     site = sanitize_domain(st.text_input("Domain (e.g., example.com)", placeholder="Enter domain to track"))
-    
+
     submitted = st.form_submit_button("Check Rankings")
 
 if submitted:
@@ -96,10 +100,13 @@ if submitted:
         results = []
         top_10_results = {}
 
+        # 🔥 Format lokasi: "City, Country" jika kota dipilih, jika tidak hanya negara
+        full_location = f"{selected_city}, {selected_country}"
+
         for keyword in keyword_list:
-            result = get_serp_results(api_key, keyword, location, lang.split(" - ")[0], site)
+            result = get_serp_results(api_key, keyword, full_location, lang.split(" - ")[0], site)
             results.append(result)
-            top_10_results[keyword] = fetch_top_10(result)  # 🔥 Mengambil Top 10 tanpa request ulang
+            top_10_results[keyword] = fetch_top_10(result)
 
         df = pd.DataFrame(results).drop(columns=["Top_100"])
 

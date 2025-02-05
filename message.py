@@ -1,11 +1,13 @@
 ABOUT_TEXT = """
 ### 🔍 About This Tool
 
-This is an on-demand SERP checker tool that retrieves Google search rankings using the Serper.dev API. It runs with your API key and in your browser.  
+This is an on-demand SERP checker tool that retrieves Google search rankings using the Serper.dev API. It runs with your API key in your browser.  
 
-🔹 No API key storage – Your API key is never saved; all requests happen in real-time.  
-🔹 Uses Serper.dev – A powerful Google Search API offering 2,500 free queries without a credit card.
+🔹 No API key storage – Your API key is never saved.  
+🔹 Uses Serper.dev – A powerful Google Search API offering 2,500 free queries without a credit card.  
+🔹 Each query uses **2 credits** and fetches up to **100 search results** per request.
 """
+
 
 
 
