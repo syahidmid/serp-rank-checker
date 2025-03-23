@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import pandas as pd
+from urllib.parse import urlparse 
 
 # Fungsi untuk mengambil hasil pencarian dengan serper.dev API
 def get_serp_results(api_key, query, num_results=20, location="US", lang="en"):
@@ -12,26 +13,21 @@ def get_serp_results(api_key, query, num_results=20, location="US", lang="en"):
         "Content-Type": "application/json"
     }
     
-    # Memastikan parameter num_results diisi dengan nilai yang dipilih dari slider
     payload = {
-        "q": query,  # Dork query yang akan dicari
-        "num": num_results,  # Jumlah hasil pencarian yang dipilih pengguna
-        "location": location,  # Lokasi pencarian (default "US")
-        "hl": lang,  # Bahasa pencarian (default "en")
-        "gl": location  # Geolokasi (default "US")
+        "q": query,  
+        "num": num_results,  
+        "location": location,  
+        "hl": lang,
+        "gl": location
     }
 
-    # Mengirimkan permintaan ke Serper.dev API
     response = requests.post(url, headers=headers, json=payload)
 
-    # Menangani respon jika status code tidak berhasil
     if response.status_code != 200:
         st.error(f"❌ Error: {response.status_code} - {response.text}")
         return []
 
     result = response.json()
-    
-    # Mengambil URL dari hasil pencarian yang berhasil
     urls = [item['link'] for item in result.get('organic', [])]
     return urls
 
@@ -42,21 +38,14 @@ def extract_emails_from_url(url, target_domain=None):
         if response.status_code != 200:
             return [], []  # Mengembalikan list kosong jika tidak ada hasil
 
-        # Parsing halaman HTML dengan BeautifulSoup
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Cari alamat email menggunakan pola regex yang lebih ketat
         emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,7}\b', soup.get_text())
-
-        # Memfilter email yang domainnya sesuai dengan input domain pengguna, jika ada
         valid_emails = clean_email_data(emails, target_domain)
-
-        # Mengembalikan email dan URL terkait
         return valid_emails, [url] * len(valid_emails)
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching {url}: {e}")
-        return [], []  # Mengembalikan list kosong jika terjadi error
+        return [], [] 
 
 # Fungsi untuk membersihkan dan memverifikasi email
 def clean_email_data(emails, target_domain=None):
@@ -146,6 +135,7 @@ if submitted:
         # Menampilkan hasil pencarian dan scraping email
         emails_found = []
         urls_found = []
+        domains_found = []
         
         for url in urls:
             if search_option == "Domain-based Search":
@@ -155,12 +145,14 @@ if submitted:
 
             emails_found.extend(emails)
             urls_found.extend(urls_for_email)
+            domains_found.extend([urlparse(u).netloc for u in urls_for_email])
+
 
         if emails_found:
             st.write("### Found Emails:")
 
             # Menghapus duplikat berdasarkan kolom 'Emails'
-            data = {'Emails': emails_found, 'URLs': urls_found}
+            data = {'Emails': emails_found, 'URLs': urls_found, 'Domain': domains_found}
             email_df = pd.DataFrame(data)
 
             # Hapus duplikat berdasarkan kolom 'Emails'
