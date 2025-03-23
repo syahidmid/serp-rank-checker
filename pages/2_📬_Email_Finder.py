@@ -5,30 +5,33 @@ import re
 import pandas as pd
 
 # Fungsi untuk mengambil hasil pencarian dengan serper.dev API
-def get_serp_results(api_key, query, num_results=100, location="US", lang="en"):
+def get_serp_results(api_key, query, num_results=20, location="US", lang="en"):
     url = "https://google.serper.dev/search"
     headers = {
         "X-API-KEY": api_key,
         "Content-Type": "application/json"
     }
     
-    # Menyesuaikan payload dengan parameter tambahan (lokasi, bahasa, dll)
+    # Memastikan parameter num_results diisi dengan nilai yang dipilih dari slider
     payload = {
-        "q": query,  # Dork query
-        "num": num_results,  # Batasi hasil pencarian menjadi 20
-        "location": location,  # Lokasi pencarian, default "US"
-        "hl": lang,  # Bahasa pencarian, default "en"
-        "gl": location  # Geolokasi, default "US"
+        "q": query,  # Dork query yang akan dicari
+        "num": num_results,  # Jumlah hasil pencarian yang dipilih pengguna
+        "location": location,  # Lokasi pencarian (default "US")
+        "hl": lang,  # Bahasa pencarian (default "en")
+        "gl": location  # Geolokasi (default "US")
     }
 
+    # Mengirimkan permintaan ke Serper.dev API
     response = requests.post(url, headers=headers, json=payload)
 
+    # Menangani respon jika status code tidak berhasil
     if response.status_code != 200:
         st.error(f"❌ Error: {response.status_code} - {response.text}")
         return []
 
     result = response.json()
-    # Ambil URL dari hasil pencarian
+    
+    # Mengambil URL dari hasil pencarian yang berhasil
     urls = [item['link'] for item in result.get('organic', [])]
     return urls
 
@@ -83,24 +86,32 @@ st.sidebar.write("**[Get your API key from Serper.dev](https://serper.dev)**")
 
 # Form input untuk mencari email
 st.title("Email Finder")
-st.subheader("Search websites and find emails.")
+st.subheader("Find Emails Anywhere on the Internet")
 
 # Pilih opsi pencarian
-search_option = st.selectbox("Choose search option", ["Domain-based Search", "Custom Dork Search"])
+search_option = st.selectbox("Choose search option", ["Domain-based Search", "Enter Service Name"])
 
 if search_option == "Domain-based Search":
     with st.form("domain_search_form"):
         target_domain = st.text_input("Enter target domain (e.g., cermati.com)", placeholder="e.g., cermati.com")
-        location = st.text_input("Enter location (e.g., US, Indonesia)", placeholder="e.g., US")
-        language = st.text_input("Enter language code (e.g., en, id)", placeholder="e.g., en")
+        location = st.text_input("Enter location (e.g., US, Indonesia)", placeholder="e.g., US", value="Indonesia")
+        language = st.text_input("Enter language code (e.g., en, id)", placeholder="e.g., en",value="id")
+        
+        # Tambahkan slider untuk jumlah hasil pencarian
+        num_results = st.slider("Select number of search results", min_value=1, max_value=50, value=20, step=1)
+        
         submitted = st.form_submit_button("Search Emails Based on Domain")
 
-elif search_option == "Custom Dork Search":
-    with st.form("dork_search_form"):
-        dork_query = st.text_input("Enter custom dork query", placeholder="e.g., \"@cermati.com\" -site:cermati.com")
+elif search_option == "Enter Service Name":
+    with st.form("service_search_form"):
+        service_name = st.text_input("Enter Service Name (e.g., Jasa SEO Jogja)", placeholder="e.g., Jasa SEO Jogja")
         location = st.text_input("Enter location (e.g., US, Indonesia)", placeholder="e.g., US")
         language = st.text_input("Enter language code (e.g., en, id)", placeholder="e.g., en")
-        submitted = st.form_submit_button("Search Emails Based on Dork")
+        
+        # Tambahkan slider untuk jumlah hasil pencarian
+        num_results = st.slider("Select number of search results", min_value=1, max_value=50, value=20, step=1)
+        
+        submitted = st.form_submit_button("Search Emails Based on Service Name")
 
 # Ketika form disubmit
 if submitted:
@@ -118,15 +129,16 @@ if submitted:
 
         # Dork query untuk domain-based search
         dork_query = f'\"@{target_domain}\" -site:{target_domain}'  # Dork query to exclude the site itself
-        urls = get_serp_results(api_key, dork_query, location=location, lang=language)
+        urls = get_serp_results(api_key, dork_query, num_results=num_results, location=location, lang=language)
 
-    elif search_option == "Custom Dork Search":
-        if not dork_query:
-            st.error("❌ Please enter a dork query!")
+    elif search_option == "Enter Service Name":
+        if not service_name:
+            st.error("❌ Please enter a service name!")
             st.stop()
 
-        # Menggunakan dork query yang dimasukkan pengguna
-        urls = get_serp_results(api_key, dork_query, location=location, lang=language)
+        # Membuat query pencarian berdasarkan nama layanan yang dimasukkan oleh pengguna
+        search_query = f'"{service_name}" "contact" "email"'
+        urls = get_serp_results(api_key, search_query, num_results=num_results, location=location, lang=language)
 
     if not urls:
         st.error("No websites found!")
@@ -147,15 +159,14 @@ if submitted:
         if emails_found:
             st.write("### Found Emails:")
 
-            # Pastikan panjang emails_found dan urls_found sama
-            if len(emails_found) != len(urls_found):
-                st.error("There is a mismatch in the number of emails and URLs.")
-            else:
-                # Membuat DataFrame untuk menampilkan email dan URL terkait
-                data = {'Emails': emails_found, 'URLs': urls_found}
-                email_df = pd.DataFrame(data)
+            # Menghapus duplikat berdasarkan kolom 'Emails'
+            data = {'Emails': emails_found, 'URLs': urls_found}
+            email_df = pd.DataFrame(data)
 
-                # Menampilkan hasil email dan URL dalam DataFrame
-                st.dataframe(email_df, use_container_width=True)
+            # Hapus duplikat berdasarkan kolom 'Emails'
+            email_df = email_df.drop_duplicates(subset="Emails", keep="first", inplace=False)
+
+            # Menampilkan hasil email dan URL dalam DataFrame
+            st.dataframe(email_df, use_container_width=True)
         else:
             st.write("No emails found in the results.")
