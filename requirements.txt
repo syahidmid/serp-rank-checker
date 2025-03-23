@@ -3,3 +3,4 @@ pandas
 requests
 pycountry
 geonamescache
+beautifulsoup4
